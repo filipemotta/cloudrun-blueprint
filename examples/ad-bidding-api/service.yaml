@@ -1,0 +1,30 @@
+service:
+  name: ad-bidding-api
+  project: freestar
+  region: us-central1
+
+container:
+  image: us-central1-docker.pkg.dev/freestar/cloud-run-images/ad-bidding-api
+  port: 8080
+  resources:
+    cpu: "2000m"
+    memory: "1Gi"
+
+scaling:
+  min_instances: 1
+  max_instances: 20
+  concurrency: 100
+
+env_vars:
+  LOG_LEVEL: "info"
+  CACHE_TTL: "300"
+
+networking:
+  ingress: "internal-and-cloud-load-balancing"
+  vpc_connector: false
+  cloud_armor: false
+
+labels:
+  team: adtech
+  cost_center: revenue
+  environment: production
