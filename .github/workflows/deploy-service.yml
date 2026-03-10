@@ -1,0 +1,157 @@
+name: Deploy Cloud Run Service (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service_yaml:
+        description: "Path to service.yaml in the caller repo"
+        required: false
+        type: string
+        default: "service.yaml"
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
+      project_id: ${{ steps.config.outputs.project_id }}
+      region: ${{ steps.config.outputs.region }}
+      service_name: ${{ steps.config.outputs.service_name }}
+      image: ${{ steps.config.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse service.yaml
+        id: config
+        run: |
+          pip install pyyaml -q
+          python3 - <<'PYEOF'
+          import yaml, os
+          with open("${{ inputs.service_yaml }}") as f:
+              c = yaml.safe_load(f)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"project_id={c['service']['project']}\n")
+              out.write(f"region={c['service']['region']}\n")
+              out.write(f"service_name={c['service']['name']}\n")
+              out.write(f"image={c['container']['image']}\n")
+          PYEOF
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1008656154042/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: terraform-deployer@${{ steps.config.outputs.project_id }}.iam.gserviceaccount.com
+          token_format: access_token
+
+      - name: Configure Docker for Artifact Registry
+        run: echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin https://${{ steps.config.outputs.region }}-docker.pkg.dev
+
+      - name: Set image tag
+        id: meta
+        run: echo "tag=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
+
+      - name: Build image
+        run: docker build -t ${{ steps.config.outputs.image }}:${{ steps.meta.outputs.tag }} .
+
+      - name: Push image
+        run: docker push ${{ steps.config.outputs.image }}:${{ steps.meta.outputs.tag }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/1008656154042/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: terraform-deployer@${{ needs.build-and-push.outputs.project_id }}.iam.gserviceaccount.com
+
+      - name: Configure git for private modules
+        run: git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "https://github.com/"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.5.0"
+
+      - name: Generate Terraform files
+        run: |
+          mkdir -p _deploy
+          cp ${{ inputs.service_yaml }} _deploy/service.yaml
+
+          cat > _deploy/main.tf <<'EOF'
+          module "service" {
+            source      = "git::https://github.com/filipemotta/cloudrun-blueprint.git//modules/cloudrun-blueprint"
+            config_file = "${path.module}/service.yaml"
+            image_tag   = var.image_tag
+          }
+
+          variable "image_tag" {
+            type    = string
+            default = "latest"
+          }
+
+          output "service_url" {
+            value = module.service.service_url
+          }
+
+          output "service_account_email" {
+            value = module.service.service_account_email
+          }
+
+          output "revision" {
+            value = module.service.revision
+          }
+          EOF
+
+          cat > _deploy/backend.tf <<EOF
+          terraform {
+            backend "gcs" {
+              bucket = "${{ needs.build-and-push.outputs.project_id }}-tfstate"
+              prefix = "services/${{ needs.build-and-push.outputs.service_name }}"
+            }
+          }
+          EOF
+
+          cat > _deploy/providers.tf <<EOF
+          terraform {
+            required_version = ">= 1.5.0"
+            required_providers {
+              google = {
+                source  = "hashicorp/google"
+                version = ">= 5.0"
+              }
+            }
+          }
+
+          provider "google" {
+            project = "${{ needs.build-and-push.outputs.project_id }}"
+            region  = "${{ needs.build-and-push.outputs.region }}"
+          }
+          EOF
+
+      - name: Terraform Init
+        working-directory: _deploy
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: _deploy
+        run: terraform apply -auto-approve -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}"
+
+      - name: Get Service URL
+        id: url
+        working-directory: _deploy
+        run: echo "url=$(terraform output -raw service_url)" >> $GITHUB_OUTPUT
+
+      - name: Health Check
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sf "${{ steps.url.outputs.url }}/health"; then
+              echo "Health check passed"
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "WARNING: Health check failed, service may still be starting"
