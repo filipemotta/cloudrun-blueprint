@@ -1,7 +1,7 @@
 # Uncomment after bootstrap creates the state bucket
 # terraform {
 #   backend "gcs" {
-#     bucket = "freestar-tfstate"
+#     bucket = "freestar-489819-tfstate"
 #     prefix = "services/ad-bidding-api"
 #   }
 # }

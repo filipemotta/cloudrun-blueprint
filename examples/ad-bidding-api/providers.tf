@@ -10,6 +10,6 @@ terraform {
 }
 
 provider "google" {
-  project = "freestar"
+  project = "freestar-489819"
   region  = "us-central1"
 }

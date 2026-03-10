@@ -11,7 +11,7 @@ TEAM="${2:?Missing TEAM}"
 COST_CENTER="${3:?Missing COST_CENTER}"
 ENVIRONMENT="${4:?Missing ENVIRONMENT}"
 
-PROJECT_ID="${PROJECT_ID:-freestar}"
+PROJECT_ID="${PROJECT_ID:-freestar-489819}"
 REGION="${REGION:-us-central1}"
 
 SERVICE_DIR="examples/${SERVICE_NAME}"
