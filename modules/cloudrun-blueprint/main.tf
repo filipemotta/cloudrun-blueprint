@@ -148,6 +148,19 @@ resource "google_cloud_run_v2_service" "this" {
 }
 
 # -----------------------------------------------------------------------------
+# 4b. Allow unauthenticated access when ingress is "all"
+# -----------------------------------------------------------------------------
+resource "google_cloud_run_v2_service_iam_member" "public" {
+  count = local.config.networking.ingress == "all" ? 1 : 0
+
+  project  = google_cloud_run_v2_service.this.project
+  location = google_cloud_run_v2_service.this.location
+  name     = google_cloud_run_v2_service.this.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
+# -----------------------------------------------------------------------------
 # 5. Monitoring Alert Policy (conditional)
 # -----------------------------------------------------------------------------
 resource "google_monitoring_alert_policy" "error_rate" {
