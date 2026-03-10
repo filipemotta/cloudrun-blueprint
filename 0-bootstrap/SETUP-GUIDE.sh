@@ -10,7 +10,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Step 1: Set your variables
 # ---------------------------------------------------------------------------
-export PROJECT_ID="freestar"
+export PROJECT_ID="YOUR_PROJECT_ID"       # <-- CHANGE THIS
 export REGION="us-central1"
 export GITHUB_ORG="your-org"        # <-- CHANGE THIS
 export GITHUB_REPO="your-repo"      # <-- CHANGE THIS

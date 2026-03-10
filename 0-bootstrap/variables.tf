@@ -1,7 +1,6 @@
 variable "project_id" {
   type        = string
   description = "GCP project ID"
-  default     = "freestar-489819"
 }
 
 variable "region" {
