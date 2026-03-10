@@ -64,6 +64,7 @@ locals {
   deployer_roles = [
     "roles/run.admin",
     "roles/iam.serviceAccountUser",
+    "roles/iam.serviceAccountAdmin",
     "roles/secretmanager.admin",
     "roles/vpcaccess.admin",
     "roles/monitoring.editor",
