@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Performs autonomous security review of Terraform code and service configurations, checking for IAM issues, public exposure, secrets handling, and compliance with platform security policies. Use when you need to audit infrastructure code for security problems.
-model: sonnet
+model: opus
 tools:
   - Bash
   - Read

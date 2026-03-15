@@ -1,7 +1,7 @@
 ---
 name: scaffold-service
 description: Creates a complete new Cloud Run service repository with app boilerplate, Dockerfile, service.yaml, and a simple deploy.yml that calls the platform's reusable workflow. Use when you need to scaffold a new microservice for the platform.
-model: sonnet
+model: opus
 tools:
   - Bash
   - Read

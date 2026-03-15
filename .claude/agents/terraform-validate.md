@@ -1,7 +1,7 @@
 ---
 name: terraform-validate
 description: Runs full Terraform validation pipeline (init, validate, plan) on the PLATFORM repo and validates service.yaml files in developer repos. Use when you need to validate infrastructure code before committing or deploying.
-model: sonnet
+model: opus
 tools:
   - Bash
   - Read
