@@ -135,9 +135,13 @@ jobs:
         working-directory: _deploy
         run: terraform init
 
+      - name: Terraform Plan
+        working-directory: _deploy
+        run: terraform plan -out=tfplan -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}"
+
       - name: Terraform Apply
         working-directory: _deploy
-        run: terraform apply -auto-approve -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}"
+        run: terraform apply tfplan
 
       - name: Get Service URL
         id: url
