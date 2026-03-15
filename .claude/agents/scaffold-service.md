@@ -126,10 +126,31 @@ USER node
 CMD ["node", "src/index.js"]
 ```
 
-### Step 6: Generate minimal app boilerplate
-Create a basic Express app in src/index.js with /health endpoint.
+### Step 6: Generate app boilerplate with dashboard page
+Create a basic Express app in src/index.js:
+- GET /health endpoint
+- GET /api/<resource> endpoint returning sample JSON (resource matches the service purpose)
+- POST /api/<resource> endpoint accepting JSON body
+- `express.static('public')` middleware to serve the dashboard
+
 Create package.json with express dependency.
 Run npm install to generate package-lock.json.
+
+Create public/index.html — a dashboard page themed like the Anthropic website (cream background #FAF9F0, terracotta accent #D97757, Inter + JetBrains Mono fonts) that includes:
+- Service name and description relevant to the microservice's purpose
+- Repo structure (files the dev touches)
+- 3-column cards: What Devs Do / What Platform Does / What Devs Never Touch
+- The 5-line deploy.yml shown as code block
+- git push flow diagram (7 steps)
+- service.yaml displayed with actual values
+- Scale-to-zero cost note
+- Platform guardrails (scaling, region, governance)
+- "How This Service Was Created" section mentioning scaffold-service agent
+- Behind the Scenes (platform repo + security model)
+- Live API demo with buttons for each endpoint (GET and POST)
+- Response time indicator with cold start detection
+
+Use the ad-bidding-api and payment-api dashboards as reference for the HTML structure and styling.
 
 ### Step 7: Generate .gitignore
 ```
