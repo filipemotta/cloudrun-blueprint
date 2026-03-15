@@ -168,7 +168,33 @@ Manually check service.yaml against guardrails:
 - Valid ingress type
 - Required labels present
 
-### Step 9: Report
+### Step 10: Create GitHub repo and push
+```bash
+cd <service_name>
+git init && git branch -M main
+git add . && git commit -m "Initial commit: <service_name> service"
+gh repo create <github_org>/<service_name> --private --source=. --push
+```
+
+### Step 11: Register repo in WIF bindings
+Add the new repo to the `github_repos` list in `0-bootstrap/terraform.tfvars`:
+```hcl
+github_repos = [
+  "cloudrun-blueprint",
+  "ad-bidding-api",
+  "<service_name>",      # ← add this line
+]
+```
+
+Then apply the bootstrap:
+```bash
+cd <platform_repo>/0-bootstrap
+terraform apply
+```
+
+This automatically creates WIF bindings for both `image-pusher` and `terraform-deployer` SAs for the new repo. No manual `gcloud` commands needed.
+
+### Step 12: Report
 ```
 ## Scaffold Report: <service_name>
 

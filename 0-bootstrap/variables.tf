@@ -14,13 +14,7 @@ variable "github_org" {
   description = "GitHub organization or username"
 }
 
-variable "github_repo" {
-  type        = string
-  description = "GitHub repository name"
-}
-
-variable "github_branch" {
-  type        = string
-  description = "GitHub branch allowed to deploy"
-  default     = "main"
+variable "github_repos" {
+  type        = list(string)
+  description = "List of GitHub repository names allowed to deploy via WIF"
 }

@@ -13,7 +13,7 @@ set -euo pipefail
 export PROJECT_ID="YOUR_PROJECT_ID"       # <-- CHANGE THIS
 export REGION="us-central1"
 export GITHUB_ORG="your-org"        # <-- CHANGE THIS
-export GITHUB_REPO="your-repo"      # <-- CHANGE THIS
+export GITHUB_REPOS='["cloudrun-blueprint", "ad-bidding-api"]'  # <-- ADD YOUR REPOS
 
 # ---------------------------------------------------------------------------
 # Step 2: Authenticate with GCP
@@ -37,14 +37,14 @@ terraform plan \
   -var="project_id=$PROJECT_ID" \
   -var="region=$REGION" \
   -var="github_org=$GITHUB_ORG" \
-  -var="github_repo=$GITHUB_REPO"
+  -var="github_repos=$GITHUB_REPOS"
 
 echo "Review the plan above. If it looks correct, run:"
 echo "  terraform apply \\"
 echo "    -var=\"project_id=$PROJECT_ID\" \\"
 echo "    -var=\"region=$REGION\" \\"
 echo "    -var=\"github_org=$GITHUB_ORG\" \\"
-echo "    -var=\"github_repo=$GITHUB_REPO\""
+echo "    -var=\"github_repos=$GITHUB_REPOS\""
 
 # ---------------------------------------------------------------------------
 # Step 5: Capture outputs for GitHub Actions

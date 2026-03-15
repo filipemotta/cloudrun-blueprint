@@ -1,0 +1,11 @@
+project_id = "YOUR_PROJECT_ID"
+region     = "us-central1"
+github_org = "your-org"
+
+# Add every service repo here. Run `terraform apply` after adding a new one.
+github_repos = [
+  "cloudrun-blueprint",
+  "ad-bidding-api",
+  # "user-auth-api",
+  # "payment-service",
+]

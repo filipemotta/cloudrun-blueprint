@@ -117,7 +117,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository" = "assertion.repository"
   }
 
-  attribute_condition = "assertion.repository == '${var.github_org}/${var.github_repo}'"
+  attribute_condition = "assertion.repository.startsWith('${var.github_org}/')"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -125,13 +125,17 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 }
 
 resource "google_service_account_iam_member" "wif_deployer" {
+  for_each = toset(var.github_repos)
+
   service_account_id = google_service_account.deployer.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${each.value}"
 }
 
 resource "google_service_account_iam_member" "wif_image_pusher" {
+  for_each = toset(var.github_repos)
+
   service_account_id = google_service_account.image_pusher.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${each.value}"
 }
