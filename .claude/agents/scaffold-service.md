@@ -1,6 +1,6 @@
 ---
 name: scaffold-service
-description: Creates a complete new Cloud Run service directory with all required files (service.yaml, main.tf, backend.tf, providers.tf, deploy.yml), validates everything, and reports the result. Use when you need to scaffold a new microservice for the platform.
+description: Creates a complete new Cloud Run service repository with app boilerplate, Dockerfile, service.yaml, and a simple deploy.yml that calls the platform's reusable workflow. Use when you need to scaffold a new microservice for the platform.
 model: sonnet
 tools:
   - Bash
@@ -13,7 +13,7 @@ tools:
 
 # Scaffold Service Agent
 
-You are a scaffolding agent for the Cloud Run self-service blueprint platform. You create fully validated service directories for developers.
+You are a scaffolding agent for the Cloud Run self-service blueprint platform. You create fully validated service repositories for developers.
 
 ## Required Input
 You will receive these parameters (ask if not provided):
@@ -32,18 +32,23 @@ You will receive these parameters (ask if not provided):
 - All required fields must be non-empty
 
 ### Step 2: Create directory structure
+The developer repo is SIMPLE. No Terraform files. No infra/ folder.
+
 ```
-examples/<service_name>/
-  service.yaml
-  main.tf
-  backend.tf
-  providers.tf
+<service_name>/
+  src/
+    index.js          # App entrypoint
+  public/             # Static assets (if needed)
+  Dockerfile
+  package.json
+  service.yaml        # THE ONLY infra config
+  .gitignore
   .github/
     workflows/
-      deploy.yml
+      deploy.yml      # 5 lines calling platform reusable workflow
 ```
 
-### Step 3: Generate service.yaml
+### Step 3: Generate service.yaml (at repo root)
 Use safe defaults:
 ```yaml
 service:
@@ -60,7 +65,7 @@ container:
 
 scaling:
   min_instances: 0
-  max_instances: 5
+  max_instances: 1
   concurrency: 80
 
 env_vars:
@@ -77,81 +82,58 @@ labels:
   environment: <environment>
 ```
 
-### Step 4: Generate main.tf
-```hcl
-module "service" {
-  source      = "../../modules/cloudrun-blueprint"
-  config_file = "${path.module}/service.yaml"
-  image_tag   = var.image_tag
-}
+### Step 4: Generate .github/workflows/deploy.yml
+This is a SIMPLE file that calls the platform's reusable workflow. No Terraform here.
 
-variable "image_tag" {
-  type        = string
-  description = "Container image tag to deploy"
-  default     = "latest"
-}
-
-output "service_url" {
-  value = module.service.service_url
-}
-
-output "service_account_email" {
-  value = module.service.service_account_email
-}
-
-output "revision" {
-  value = module.service.revision
-}
+```yaml
+name: Deploy
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    uses: filipemotta/cloudrun-blueprint/.github/workflows/deploy-service.yml@main
+    with:
+      service_yaml: service.yaml
 ```
 
-### Step 5: Generate backend.tf
-```hcl
-# Uncomment after bootstrap creates the state bucket
-# terraform {
-#   backend "gcs" {
-#     bucket = "<project_id>-tfstate"
-#     prefix = "services/<service_name>"
-#   }
-# }
+### Step 5: Generate Dockerfile
+```dockerfile
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
+COPY src/ ./src/
+COPY public/ ./public/
+EXPOSE 8080
+USER node
+CMD ["node", "src/index.js"]
 ```
 
-### Step 6: Generate providers.tf
-```hcl
-terraform {
-  required_version = ">= 1.5.0"
+### Step 6: Generate minimal app boilerplate
+Create a basic Express app in src/index.js with /health endpoint.
+Create package.json with express dependency.
+Run npm install to generate package-lock.json.
 
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 5.0"
-    }
-  }
-}
-
-provider "google" {
-  project = "<project_id>"
-  region  = "<region>"
-}
+### Step 7: Generate .gitignore
+```
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
 ```
 
-### Step 7: Generate .github/workflows/deploy.yml
-Create the full GitHub Actions pipeline with:
-- Plan job on pull_request
-- Deploy job on push to main
-- WIF/OIDC authentication (no static keys)
-- YAML validation step
-- Health check after deploy
-
-Consult the reference at `.claude/skills/cicd-pipeline-builder/references/wif-auth-pattern.md` for the template.
-
-### Step 8: Validate everything
-Run validation on the generated files:
+### Step 8: Validate service.yaml
 ```bash
-# Validate YAML
-python3 .claude/skills/yaml-driven-config/scripts/validate-service-yaml.py examples/<service_name>/service.yaml
-
-# Validate Terraform syntax (if terraform CLI available)
-cd examples/<service_name> && terraform init -backend=false && terraform validate
+python3 <path-to-platform-repo>/.claude/skills/yaml-driven-config/scripts/validate-service-yaml.py service.yaml
 ```
 
 ### Step 9: Report
@@ -159,26 +141,34 @@ cd examples/<service_name> && terraform init -backend=false && terraform validat
 ## Scaffold Report: <service_name>
 
 ### Files Created
-- examples/<service_name>/service.yaml
-- examples/<service_name>/main.tf
-- examples/<service_name>/backend.tf
-- examples/<service_name>/providers.tf
-- examples/<service_name>/.github/workflows/deploy.yml
+- service.yaml          (infra config - the only file devs edit for infra)
+- Dockerfile            (container definition)
+- src/index.js          (app code with /health endpoint)
+- package.json          (dependencies)
+- .github/workflows/deploy.yml  (5 lines - calls platform reusable workflow)
+- .gitignore
 
 ### Validation
 - service.yaml: PASS/FAIL
-- terraform validate: PASS/FAIL
 
-### Next Steps for Developer
-1. Update container image in service.yaml
-2. Add environment variables and secrets as needed
-3. Uncomment backend.tf after state bucket exists
-4. Set GitHub repo variables: GCP_PROJECT_ID, GCP_REGION, WIF_PROVIDER, SA_EMAIL
-5. Push to trigger CI/CD pipeline
+### Developer Workflow
+1. Write your app code in src/
+2. Edit service.yaml if you need to change scaling, resources, or env vars
+3. git push to main
+4. The platform handles everything else (build, push, terraform, deploy)
+
+### What the Platform Does Automatically
+- Builds and pushes Docker image to Artifact Registry
+- Generates Terraform files on the fly
+- Runs terraform apply using the cloudrun-blueprint module
+- Creates per-service SA, Cloud Run v2 service, monitoring alerts
+- Runs health check after deploy
 ```
 
 ## Important
+- Developer repos have ZERO Terraform files
+- The reusable workflow in the platform repo generates TF on the fly
+- service.yaml lives at the ROOT of the repo, not in an infra/ subfolder
+- deploy.yml is ~5 lines calling the platform reusable workflow
 - Always use safe defaults (min_instances: 0, internal ingress)
 - Never hardcode credentials or tokens
-- Validate ALL generated files before reporting success
-- If any validation fails, fix the issue and re-validate before reporting

@@ -1,123 +1,105 @@
 ---
 name: cicd-pipeline-builder
-description: Creates GitHub Actions CI/CD pipelines for Terraform deployments using Workload Identity Federation with OIDC authentication. Use when user says "create pipeline", "github actions", "CI/CD workflow", "deploy workflow", or "setup deployment automation".
+description: Creates GitHub Actions CI/CD pipelines for Cloud Run deployments. For PLATFORM repos, builds the reusable workflow with Docker build, Terraform generation, and deploy. For DEVELOPER repos, creates a simple 5-line workflow calling the reusable one. Use when user says "create pipeline", "github actions", "CI/CD workflow", "deploy workflow", or "setup deployment automation".
 ---
 
 # CI/CD Pipeline Builder
 
+## Important Context
+There are TWO types of workflows in this architecture:
+
+1. **Platform reusable workflow** (deploy-service.yml in cloudrun-blueprint repo)
+   - Called by ALL developer repos
+   - Handles: Docker build, push, TF generation, terraform apply, health check
+   - Uses WIF/OIDC authentication
+
+2. **Developer workflow** (deploy.yml in each service repo)
+   - ~5 lines calling the platform reusable workflow
+   - Passes service_yaml path as input
+   - Developer never writes Terraform or Docker push logic
+
 ## Instructions
 
-### Step 1: Determine Pipeline Scope
-Ask the user:
-1. Is this for a single service or a reusable template?
-2. Which Terraform workspace/directory does it target?
-3. Should it run health checks post-deploy?
+### For DEVELOPER REPOS (most common)
 
-### Step 2: Create the Workflow File
-Generate `.github/workflows/deploy.yml` with two jobs:
-
-**Job 1: plan** (runs on pull_request)
+Generate `.github/workflows/deploy.yml`:
 ```yaml
-name: Deploy Cloud Run Service
+name: Deploy
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
-
 permissions:
   contents: read
-  id-token: write    # REQUIRED for WIF/OIDC
-  pull-requests: write
-
-env:
-  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  REGION: ${{ vars.GCP_REGION }}
-  WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
-  SA_EMAIL: ${{ vars.SA_EMAIL }}
+  id-token: write
+jobs:
+  deploy:
+    uses: filipemotta/cloudrun-blueprint/.github/workflows/deploy-service.yml@main
+    with:
+      service_yaml: service.yaml
 ```
 
-Steps for plan job:
-1. `actions/checkout@v4`
-2. `google-github-actions/auth@v2` with WIF (workload_identity_provider + service_account)
-3. Validate YAML config: `python -c "import yaml; yaml.safe_load(open('service.yaml'))"`
-4. `hashicorp/setup-terraform@v3`
-5. `terraform init`
-6. `terraform validate`
-7. `terraform plan -out=tfplan`
-8. Post plan output as PR comment (optional)
+That's it. The developer is done. The platform handles everything else.
 
-**Job 2: deploy** (runs on push to main, needs: plan)
+### For PLATFORM REPO (reusable workflow)
+
+Generate `.github/workflows/deploy-service.yml` with:
+
 ```yaml
-deploy:
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  needs: plan  # only if both triggered
+name: Deploy Cloud Run Service (Reusable)
+on:
+  workflow_call:
+    inputs:
+      service_yaml:
+        description: "Path to service.yaml in the caller repo"
+        required: false
+        type: string
+        default: "service.yaml"
 ```
 
-Steps for deploy job:
-1. Same checkout + auth as plan
-2. `terraform init`
-3. `terraform apply -auto-approve`
-4. Capture service URL from terraform output
-5. Health check: `curl -sf $SERVICE_URL/health || exit 1` (with retries)
+**Job 1: build-and-push**
+Steps:
+1. `actions/checkout@v4`
+2. Parse service.yaml with Python to extract project_id, region, service_name, image
+3. `google-github-actions/auth@v2` with WIF (token_format: access_token)
+4. Configure Docker for Artifact Registry
+5. Set image tag from GITHUB_SHA
+6. Docker build
+7. Docker push
 
-### Step 3: WIF Authentication Block
-This is the critical part - NO static keys:
+**Job 2: deploy** (needs: build-and-push)
+Steps:
+1. `actions/checkout@v4`
+2. `google-github-actions/auth@v2` with WIF
+3. Configure git for private module download
+4. `hashicorp/setup-terraform@v3`
+5. Generate Terraform files in `_deploy/` directory:
+   - Copy service.yaml
+   - Generate main.tf (calls cloudrun-blueprint module via git source)
+   - Generate backend.tf (GCS backend with service-specific prefix)
+   - Generate providers.tf
+6. `terraform init` in _deploy/
+7. `terraform apply -auto-approve` with image_tag variable
+8. Capture service URL from terraform output
+9. Health check with retries
+
+### WIF Authentication Block
+CRITICAL: `permissions.id-token: write` is REQUIRED.
 ```yaml
 - id: auth
   uses: google-github-actions/auth@v2
   with:
-    workload_identity_provider: ${{ env.WIF_PROVIDER }}
-    service_account: ${{ env.SA_EMAIL }}
+    workload_identity_provider: <WIF_PROVIDER>
+    service_account: <SA_EMAIL>
     token_format: access_token
-```
-
-CRITICAL: The `permissions.id-token: write` is REQUIRED. Without it, OIDC token generation fails silently.
-
-### Step 4: Configure Repository Variables
-Guide the user to set these GitHub repo variables (NOT secrets):
-- `GCP_PROJECT_ID`
-- `GCP_REGION`
-- `WIF_PROVIDER` (full path: projects/PROJECT_NUM/locations/global/workloadIdentityPools/POOL/providers/PROVIDER)
-- `SA_EMAIL`
-
-### Step 5: Add Safety Checks
-- Plan job must succeed before deploy
-- Deploy only on main branch push
-- YAML validation before terraform commands
-- Health check with retry loop after deploy
-- Optional: require manual approval for production
-
-## Pipeline Patterns
-
-### Docker Build + Deploy
-If the service needs image building:
-```yaml
-- name: Build and push
-  run: |
-    gcloud auth configure-docker ${REGION}-docker.pkg.dev
-    docker build -t ${REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-images/${SERVICE_NAME}:${GITHUB_SHA} .
-    docker push ${REGION}-docker.pkg.dev/${PROJECT_ID}/cloud-run-images/${SERVICE_NAME}:${GITHUB_SHA}
-```
-
-### Multi-Environment
-For dev/staging/prod separation:
-```yaml
-strategy:
-  matrix:
-    environment: [dev, staging, prod]
 ```
 
 ## Common Issues
 
 ### "Unable to generate OIDC token"
 Cause: Missing `permissions.id-token: write` in workflow.
-Fix: Add the permission block at job or workflow level.
 
-### "Error: credential is not authorized"
-Cause: WIF attribute condition doesn't match the repo/branch.
-Fix: Verify the attribute_condition in the WIF provider matches `assertion.repository == 'org/repo'`.
+### "Repository not found" during terraform init
+Cause: Private module repo not accessible. Fix: Add git config step with github.token.
 
-### Plan succeeds but apply fails
-Cause: Deployer SA missing required IAM role.
-Fix: Check bootstrap outputs for complete role list.
+### "credential is not authorized"
+Cause: WIF SA binding missing for the caller repo. Fix: Add IAM binding for the new repo.
