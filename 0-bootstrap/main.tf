@@ -68,7 +68,6 @@ locals {
     "roles/secretmanager.admin",
     "roles/vpcaccess.admin",
     "roles/monitoring.editor",
-    "roles/artifactregistry.writer",
     "roles/storage.admin",
   ]
 }
@@ -79,6 +78,21 @@ resource "google_project_iam_member" "deployer_roles" {
   project = var.project_id
   role    = each.value
   member  = "serviceAccount:${google_service_account.deployer.email}"
+}
+
+# -----------------------------------------------------------------------------
+# 3b. Image Pusher Service Account (least-privilege for Docker build + push)
+# -----------------------------------------------------------------------------
+resource "google_service_account" "image_pusher" {
+  account_id   = "image-pusher"
+  display_name = "Image Pusher for CI/CD Docker builds"
+  project      = var.project_id
+}
+
+resource "google_project_iam_member" "image_pusher_ar" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.image_pusher.email}"
 }
 
 # -----------------------------------------------------------------------------
@@ -110,8 +124,14 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   }
 }
 
-resource "google_service_account_iam_member" "wif_binding" {
+resource "google_service_account_iam_member" "wif_deployer" {
   service_account_id = google_service_account.deployer.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${var.github_repo}"
+}
+
+resource "google_service_account_iam_member" "wif_image_pusher" {
+  service_account_id = google_service_account.image_pusher.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_org}/${var.github_repo}"
 }
