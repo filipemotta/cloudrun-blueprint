@@ -69,6 +69,7 @@ locals {
     "roles/vpcaccess.admin",
     "roles/monitoring.editor",
     "roles/storage.admin",
+    "roles/artifactregistry.reader",
   ]
 }
 
