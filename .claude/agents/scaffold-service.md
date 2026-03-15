@@ -42,10 +42,19 @@ The developer repo is SIMPLE. No Terraform files. No infra/ folder.
   Dockerfile
   package.json
   service.yaml        # THE ONLY infra config
+  CLAUDE.md           # Dev-facing project context
   .gitignore
   .github/
     workflows/
       deploy.yml      # 5 lines calling platform reusable workflow
+  .claude/
+    agents/
+      validate-and-push.md     # Pre-deploy validation agent
+    skills/
+      service-yaml-validator/
+        SKILL.md               # Validate service.yaml
+      deploy-troubleshoot/
+        SKILL.md               # Diagnose failed deploys
 ```
 
 ### Step 3: Generate service.yaml (at repo root)
@@ -131,7 +140,27 @@ node_modules/
 .DS_Store
 ```
 
-### Step 8: Validate service.yaml
+### Step 8: Generate CLAUDE.md and developer tooling
+Create CLAUDE.md with:
+- Service name and description
+- Developer workflow (edit service.yaml, git push, done)
+- Files they touch vs files they don't
+- What the platform does automatically
+- Guardrail rules
+- Troubleshooting tips
+
+Create .claude/agents/validate-and-push.md:
+- Pre-deploy agent that validates service.yaml, tests Docker build, then pushes
+
+Create .claude/skills/service-yaml-validator/SKILL.md:
+- Validates service.yaml against platform guardrails
+
+Create .claude/skills/deploy-troubleshoot/SKILL.md:
+- Diagnoses failed deployments by matching error patterns
+
+Use the files from the ad-bidding-api repo as templates for these.
+
+### Step 9: Validate service.yaml
 ```bash
 python3 <path-to-platform-repo>/.claude/skills/yaml-driven-config/scripts/validate-service-yaml.py service.yaml
 ```
@@ -145,7 +174,11 @@ python3 <path-to-platform-repo>/.claude/skills/yaml-driven-config/scripts/valida
 - Dockerfile            (container definition)
 - src/index.js          (app code with /health endpoint)
 - package.json          (dependencies)
+- CLAUDE.md             (project context for Claude Code)
 - .github/workflows/deploy.yml  (5 lines - calls platform reusable workflow)
+- .claude/agents/validate-and-push.md  (pre-deploy validation)
+- .claude/skills/service-yaml-validator/SKILL.md
+- .claude/skills/deploy-troubleshoot/SKILL.md
 - .gitignore
 
 ### Validation
