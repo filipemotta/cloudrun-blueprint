@@ -161,9 +161,12 @@ Create .claude/skills/deploy-troubleshoot/SKILL.md:
 Use the files from the ad-bidding-api repo as templates for these.
 
 ### Step 9: Validate service.yaml
-```bash
-python3 <path-to-platform-repo>/.claude/skills/yaml-driven-config/scripts/validate-service-yaml.py service.yaml
-```
+Manually check service.yaml against guardrails:
+- Required sections: service, container, labels
+- region in allowed list
+- max_instances <= 50, min_instances >= 0
+- Valid ingress type
+- Required labels present
 
 ### Step 9: Report
 ```

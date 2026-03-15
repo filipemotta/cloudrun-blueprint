@@ -50,11 +50,7 @@ terraform plan -no-color -input=false 2>&1
 Note: Plan may fail without GCP credentials. Report as "plan skipped: no credentials".
 
 ### Step 3: For DEVELOPER REPO
-Only validate service.yaml:
-```bash
-python3 <path>/validate-service-yaml.py service.yaml
-```
-If the validation script is not available, manually check:
+Only validate service.yaml. Manually check:
 - Required sections: service, container, labels
 - Required fields: service.name, service.project, service.region, container.image
 - Required labels: team, cost_center, environment

@@ -104,14 +104,6 @@ locals {
 
 Use `merge()` and `try()` to apply defaults safely.
 
-### Step 6: Generate Validation Script
-Create `scripts/validate-service-yaml.py`:
-- Parse YAML
-- Check required fields
-- Validate types and constraints
-- Return clear error messages with line numbers
-- Exit 0 on success, 1 on failure (for CI integration)
-
 ## Design Principles
 
 ### Keep It Flat
