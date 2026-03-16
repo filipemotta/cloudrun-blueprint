@@ -36,6 +36,47 @@ jobs:
               out.write(f"image={c['container']['image']}\n")
           PYEOF
 
+      - name: Validate guardrails
+        run: |
+          python3 - <<'PYEOF'
+          import yaml, sys
+          with open("${{ inputs.service_yaml }}") as f:
+              c = yaml.safe_load(f)
+
+          errors = []
+          region = c.get("service", {}).get("region", "")
+          allowed_regions = ["us-central1", "us-east1", "europe-west1"]
+          if region not in allowed_regions:
+              errors.append(f"GUARDRAIL: region '{region}' not allowed. Must be: {', '.join(allowed_regions)}")
+
+          scaling = c.get("scaling", {})
+          max_inst = scaling.get("max_instances", 5)
+          min_inst = scaling.get("min_instances", 0)
+          if max_inst > 50:
+              errors.append(f"GUARDRAIL: max_instances={max_inst} exceeds limit of 50")
+          if min_inst < 0:
+              errors.append(f"GUARDRAIL: min_instances={min_inst} cannot be negative")
+          if max_inst < min_inst:
+              errors.append(f"GUARDRAIL: max_instances={max_inst} < min_instances={min_inst}")
+
+          ingress = c.get("networking", {}).get("ingress", "internal-and-cloud-load-balancing")
+          valid_ingress = ["all", "internal", "internal-and-cloud-load-balancing"]
+          if ingress not in valid_ingress:
+              errors.append(f"GUARDRAIL: ingress '{ingress}' invalid. Must be: {', '.join(valid_ingress)}")
+
+          labels = c.get("labels", {})
+          for lbl in ["team", "cost_center", "environment"]:
+              if not labels.get(lbl):
+                  errors.append(f"GUARDRAIL: missing required label '{lbl}'")
+
+          if errors:
+              print("SERVICE.YAML VALIDATION FAILED:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+          print("Service.yaml guardrails passed.")
+          PYEOF
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
